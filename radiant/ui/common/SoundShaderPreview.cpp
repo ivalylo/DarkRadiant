@@ -45,13 +45,7 @@ SoundShaderPreview::SoundShaderPreview(wxWindow* parent) :
 	_treeView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &SoundShaderPreview::onSelectionChanged, this);
 	_treeView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &SoundShaderPreview::onItemActivated, this);
 
-    _shaderFileInfo = new wxutil::DeclFileInfo(this, decl::Type::SoundShader);
-
-	auto* vbox = new wxBoxSizer(wxVERTICAL);
-	vbox->Add(_shaderFileInfo, 0, wxEXPAND|wxTOP|wxBOTTOM, 6);
-	vbox->Add(_treeView, 1, wxEXPAND);
-
-	GetSizer()->Add(vbox, 1, wxEXPAND);
+	GetSizer()->Add(_treeView, 1, wxEXPAND);
 	GetSizer()->Add(createControlPanel(this), 0, wxALIGN_BOTTOM | wxLEFT, 12);
 
 	// Attach to the close event
@@ -104,10 +98,15 @@ wxSizer* SoundShaderPreview::createControlPanel(wxWindow* parent)
 	return vbox;
 }
 
-void SoundShaderPreview::setSoundShader(const std::string& soundShader)
+void SoundShaderPreview::ClearPreview()
 {
-	_soundShader = soundShader;
-	update();
+    SetPreviewDeclName({});
+}
+
+void SoundShaderPreview::SetPreviewDeclName(const std::string& declName)
+{
+    _soundShader = declName;
+    update();
 }
 
 void SoundShaderPreview::playRandomSoundFile()
@@ -168,18 +167,12 @@ void SoundShaderPreview::update()
 				}
 			}
 
-            _shaderFileInfo->setName(shader->getDeclName());
-            _shaderFileInfo->setPath(shader->getDeclFilePath());
-
 			handleSelectionChange();
 		}
 		else
 		{
 			// Not a valid soundshader, switch to inactive
 			Enable(false);
-
-            _shaderFileInfo->setName("-");
-            _shaderFileInfo->setPath("-");
 		}
 	}
     else

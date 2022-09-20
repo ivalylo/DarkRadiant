@@ -78,9 +78,19 @@ ParticlePreview::~ParticlePreview()
 	ev->disconnectToolItem(_reloadButton);
 }
 
-void ParticlePreview::setParticle(const std::string& name)
+wxWindow* ParticlePreview::GetPreviewWidget()
 {
-    std::string nameClean = name;
+    return _mainPanel;
+}
+
+void ParticlePreview::ClearPreview()
+{
+    SetPreviewDeclName({});
+}
+
+void ParticlePreview::SetPreviewDeclName(const std::string& declName)
+{
+    std::string nameClean = declName;
 
     if (string::ends_with(nameClean, ".prt"))
     {

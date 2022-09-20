@@ -1,18 +1,15 @@
-#include "ShaderSelector.h"
+#include "MaterialSelector.h"
 
 #include <vector>
 #include <string>
 
-#include "i18n.h"
 #include "ishaders.h"
-
-#include <wx/sizer.h>
 
 #include "texturelib.h"
 #include "gamelib.h"
-#include "string/split.h"
 #include "string/predicate.h"
 
+#include "../common/TexturePreviewCombo.h"
 #include "wxutil/dataview/VFSTreePopulator.h"
 #include "wxutil/dataview/ThreadedDeclarationTreePopulator.h"
 
@@ -36,10 +33,10 @@ private:
     std::vector<std::string> _prefixes;
 
 public:
-    ThreadedMaterialLoader(const wxutil::DeclarationTreeView::Columns& columns, ShaderSelector::TextureFilter filter) :
+    ThreadedMaterialLoader(const wxutil::DeclarationTreeView::Columns& columns, MaterialSelector::TextureFilter filter) :
         ThreadedDeclarationTreePopulator(decl::Type::Material, columns, TEXTURE_ICON)
     {
-        if (filter == ShaderSelector::TextureFilter::Lights)
+        if (filter == MaterialSelector::TextureFilter::Lights)
         {
             _prefixes = game::current::getLightTexturePrefixes();
         }
@@ -77,65 +74,29 @@ protected:
     }
 };
 
-ShaderSelector::ShaderSelector(wxWindow* parent, const std::function<void()>& selectionChanged,
+MaterialSelector::MaterialSelector(wxWindow* parent, const std::function<void()>& selectionChanged,
     TextureFilter textureFilter) :
-	wxPanel(parent, wxID_ANY),
-	_treeView(nullptr),
+    DeclarationSelector(parent, decl::Type::Material),
     _textureFilter(textureFilter),
 	_selectionChanged(selectionChanged)
 {
-	SetSizer(new wxBoxSizer(wxVERTICAL));
+    AddPreviewToBottom(new TexturePreviewCombo(this));
 
-    // Pack in TreeView and info panel
-	createTreeView();
-	createPreview();
+    Populate();
 }
 
-std::string ShaderSelector::getSelection()
+void MaterialSelector::Populate()
 {
-    return _treeView->GetSelectedDeclName();
+    PopulateTreeView(std::make_shared<ThreadedMaterialLoader>(GetColumns(), _textureFilter));
 }
 
-void ShaderSelector::setSelection(const std::string& sel)
+MaterialPtr MaterialSelector::getSelectedShader()
 {
-    _treeView->SetSelectedDeclName(sel);
+	return GlobalMaterialManager().getMaterial(GetSelectedDeclName());
 }
 
-void ShaderSelector::createTreeView()
+void MaterialSelector::onTreeViewSelectionChanged()
 {
-    _treeView = new wxutil::DeclarationTreeView(this, decl::Type::Material, 
-        _shaderTreeColumns, wxDV_NO_HEADER | wxDV_SINGLE);
-
-    // Single visible column, containing the directory/shader name and the icon
-    _treeView->AppendIconTextColumn(_("Value"), _shaderTreeColumns.iconAndName.getColumnIndex(),
-        wxDATAVIEW_CELL_INERT, wxCOL_WIDTH_AUTOSIZE, wxALIGN_NOT, wxDATAVIEW_COL_SORTABLE);
-
-    // Use the TreeModel's full string search function
-    _treeView->AddSearchColumn(_shaderTreeColumns.leafName);
-
-    // Get selection and connect the changed callback
-    _treeView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &ShaderSelector::_onSelChange, this);
-
-    GetSizer()->Add(_treeView, 1, wxEXPAND);
-
-    _treeView->Populate(std::make_shared<ThreadedMaterialLoader>(_shaderTreeColumns, _textureFilter));
-}
-
-void ShaderSelector::createPreview()
-{
-    _previewCombo = new TexturePreviewCombo(this);
-    GetSizer()->Add(_previewCombo, 0, wxEXPAND | wxTOP, 3);
-}
-
-MaterialPtr ShaderSelector::getSelectedShader()
-{
-	return GlobalMaterialManager().getMaterial(getSelection());
-}
-
-void ShaderSelector::_onSelChange(wxDataViewEvent& ev)
-{
-    _previewCombo->SetTexture(getSelection());
-
     if (_selectionChanged)
     {
         _selectionChanged();

@@ -20,7 +20,7 @@
 #include <wx/radiobut.h>
 
 
-#include "ui/common/ShaderChooser.h" // for static displayLightInfo() function
+#include "ui/materials/MaterialChooser.h" // for static displayLightInfo() function
 #include "util/ScopedBoolLock.h"
 #include "gamelib.h"
 
@@ -87,11 +87,11 @@ void LightInspector::shaderSelectionChanged()
     if (_updateActive) return;
 
     std::string commandStr("setLightTexture: ");
-    commandStr += _texSelector->getSelection();
+    commandStr += _texSelector->GetSelectedDeclName();
     UndoableCommand command(commandStr);
 
     // Write the texture key
-    setKeyValueAllLights("texture", _texSelector->getSelection());
+    setKeyValueAllLights("texture", _texSelector->GetSelectedDeclName());
 }
 
 // Set up the point/projected light options
@@ -175,8 +175,8 @@ void LightInspector::setupTextureWidgets()
 {
     wxPanel* parent = findNamedObject<wxPanel>(this, "LightInspectorChooserPanel");
 
-    _texSelector = new ShaderSelector(parent, std::bind(&LightInspector::shaderSelectionChanged, this), 
-        ShaderSelector::TextureFilter::Lights);
+    _texSelector = new MaterialSelector(parent, std::bind(&LightInspector::shaderSelectionChanged, this),
+        MaterialSelector::TextureFilter::Lights);
     parent->GetSizer()->Add(_texSelector, 1, wxEXPAND);
 }
 
@@ -476,7 +476,7 @@ void LightInspector::getValuesFromEntity()
     updateColourWidgets();
 
     // Set the texture selection from the "texture" key
-    _texSelector->setSelection(entity->getKeyValue("texture"));
+    _texSelector->SetSelectedDeclName(entity->getKeyValue("texture"));
 
     // Determine whether this is a projected light, and set the toggles
     // appropriately
