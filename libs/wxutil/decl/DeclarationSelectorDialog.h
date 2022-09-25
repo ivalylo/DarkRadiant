@@ -7,6 +7,7 @@
 #include "../dialog/DialogBase.h"
 
 class wxSizer;
+class wxButton;
 class wxStdDialogButtonSizer;
 
 namespace wxutil
@@ -19,6 +20,9 @@ class DeclarationSelector;
  *
  * Provides a tree view of available declaration items plus optional previews
  * of the active selection.
+ *
+ * It will attempt to restore the last selected item from the registry when shown,
+ * unless the SetSelectedDeclName() method is called, which always takes precedence.
  */
 class DeclarationSelectorDialog :
     public DialogBase,
@@ -29,7 +33,9 @@ private:
 
     DeclarationSelector* _selector;
     wxSizer* _mainSizer;
+    wxSizer* _bottomRowSizer;
     wxStdDialogButtonSizer* _buttonSizer;
+    wxButton* _reloadDeclsButton;
 
     bool _restoreSelectionFromRegistry;
 
@@ -51,12 +57,18 @@ public:
 protected:
     void SetSelector(DeclarationSelector* selector);
 
+    // Adds a widget to the bottom row, to the left of the standard buttons
+    void AddItemToBottomRow(wxWindow* widget);
+    // Adds a widget to the bottom row, to the left of the standard buttons
+    void AddItemToBottomRow(wxSizer* sizer);
+
     wxButton* GetAffirmativeButton();
 
 private:
     void HandleTreeViewSelectionChanged();
     void onDeclSelectionChanged(wxDataViewEvent& ev);
     void onDeclItemActivated(wxDataViewEvent& ev);
+    void onReloadDecls(wxCommandEvent& ev);
 };
 
 }

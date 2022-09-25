@@ -4,6 +4,8 @@
 #include <wx/button.h>
 #include <wx/sizer.h>
 
+#include "i18n.h"
+#include "ideclmanager.h"
 #include "iregistry.h"
 
 namespace wxutil
@@ -24,9 +26,26 @@ DeclarationSelectorDialog::DeclarationSelectorDialog(decl::Type declType,
     _mainSizer = new wxBoxSizer(wxVERTICAL);
     GetSizer()->Add(_mainSizer, 1, wxEXPAND | wxALL, 12);
 
-    // Button row
+    // Bottom row
+    auto grid = new wxFlexGridSizer(1, 2, 0, 12);
+    grid->AddGrowableCol(0);
+    grid->AddGrowableCol(1);
+
+    // Left half
+    _bottomRowSizer = new wxBoxSizer(wxHORIZONTAL);
+    grid->Add(_bottomRowSizer, 1, wxALIGN_LEFT);
+
+    // Right half contains the buttons
     _buttonSizer = CreateStdDialogButtonSizer(wxOK | wxCANCEL);
-    _mainSizer->Add(_buttonSizer, 0, wxALIGN_RIGHT, 12);
+
+    // Add a Reload Decls button
+    _reloadDeclsButton = new wxButton(this, wxID_ANY, _("Reload Decls"));
+    _reloadDeclsButton->Bind(wxEVT_BUTTON, &DeclarationSelectorDialog::onReloadDecls, this);
+    _buttonSizer->Prepend(_reloadDeclsButton, 0, wxLEFT | wxALIGN_CENTER_VERTICAL | wxRIGHT, 12);
+
+    grid->Add(_buttonSizer, 0, wxALIGN_RIGHT);
+
+    _mainSizer->Add(grid, 0, wxEXPAND, 12);
 
     // Save the state of this dialog on close
     RegisterPersistableObject(this);
@@ -50,6 +69,16 @@ void DeclarationSelectorDialog::SetSelector(DeclarationSelector* selector)
 
     // The selector state should be persisted on dialog close
     RegisterPersistableObject(_selector);
+}
+
+void DeclarationSelectorDialog::AddItemToBottomRow(wxWindow* widget)
+{
+    _bottomRowSizer->Prepend(widget, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+}
+
+void DeclarationSelectorDialog::AddItemToBottomRow(wxSizer* sizer)
+{
+    _bottomRowSizer->Prepend(sizer, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
 }
 
 std::string DeclarationSelectorDialog::GetSelectedDeclName()
@@ -99,6 +128,11 @@ void DeclarationSelectorDialog::onDeclItemActivated(wxDataViewEvent&)
     {
         EndModal(wxID_OK);
     }
+}
+
+void DeclarationSelectorDialog::onReloadDecls(wxCommandEvent& ev)
+{
+    GlobalDeclarationManager().reloadDeclarations();
 }
 
 void DeclarationSelectorDialog::loadFromPath(const std::string& registryKey)
