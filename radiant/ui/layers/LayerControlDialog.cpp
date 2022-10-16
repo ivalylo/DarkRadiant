@@ -65,7 +65,7 @@ void LayerControlDialog::populateWindow()
         wxDATAVIEW_CELL_INERT, wxCOL_WIDTH_AUTOSIZE, wxALIGN_NOT);
 
     _layersView->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &LayerControlDialog::onItemActivated, this);
-    _layersView->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, &LayerControlDialog::onItemToggled, this);
+    _layersView->Bind(wxEVT_DATAVIEW_ITEM_VALUE_CHANGED, &LayerControlDialog::onItemValueChanged, this);
     _layersView->Bind(wxEVT_DATAVIEW_SELECTION_CHANGED, &LayerControlDialog::onItemSelected, this);
 
     // Configure drag and drop
@@ -582,17 +582,23 @@ void LayerControlDialog::onItemActivated(wxDataViewEvent& ev)
     GlobalMapModule().getRoot()->getLayerManager().setSelected(layerId, selected);
 }
 
-void LayerControlDialog::onItemToggled(wxDataViewEvent& ev)
+void LayerControlDialog::onItemValueChanged(wxDataViewEvent& ev)
 {
-    if (!GlobalMapModule().getRoot()) return;
+    auto root = GlobalMapModule().getRoot();
+    if (!root) return;
 
-    if (ev.GetDataViewColumn() != nullptr &&
-        static_cast<int>(ev.GetDataViewColumn()->GetModelColumn()) == _columns.visible.getColumnIndex())
+    // In wxGTK the column shipped with the even doesn't seem to be correct
+    // So we just check if the value in the model differs from the layer's visibility
+    
+    wxutil::TreeModel::Row row(ev.GetItem(), *_layerStore);
+
+    auto visible = row[_columns.visible].getBool();
+    auto layerId = row[_columns.id].getInteger();
+
+    // Check if the visibility has changed in the model
+    if (root->getLayerManager().layerIsVisible(layerId) != visible)
     {
-        // Model value in the boolean column has changed, this means the checkbox has been toggled
-        wxutil::TreeModel::Row row(ev.GetItem(), *_layerStore);
-
-        GlobalMapModule().getRoot()->getLayerManager().setLayerVisibility(row[_columns.id].getInteger(), row[_columns.visible].getBool());
+        root->getLayerManager().setLayerVisibility(layerId, visible);
     }
 }
 
@@ -717,13 +723,6 @@ void LayerControlDialog::onDropPossible(wxDataViewEvent& ev)
         ev.Veto();
         return;
     }
-
-    // Also don't allow dropping if the target is already an immediate parent
-    if (layerManager.getParentLayer(selectedLayerId) == targetLayerId)
-    {
-        ev.Veto();
-        return;
-    }
 }
 
 void LayerControlDialog::onDrop(wxDataViewEvent& ev)
@@ -740,28 +739,43 @@ void LayerControlDialog::onDrop(wxDataViewEvent& ev)
     // If an empty item is passed we're supposed to make it top-level again
     auto targetLayerId = item.IsOk() ? row[_columns.id].getInteger() : -1;
 
-    // Read the source layer ID and veto the event if it's the same as the source ID
-    if (auto obj = dynamic_cast<wxTextDataObject*>(ev.GetDataObject()); obj)
+    if (ev.GetDataFormat() != wxDF_UNICODETEXT)
     {
-        auto sourceLayerId = string::convert<int>(obj->GetText().ToStdString(), -1);
+        ev.Veto();
+        return;
+    }
 
-        if (sourceLayerId == targetLayerId)
-        {
-            ev.Veto();
-            return;
-        }
+    // Read the source layer ID and veto the event if it's the same as the source ID
+    wxTextDataObject obj;
+    obj.SetData(wxDF_UNICODETEXT, ev.GetDataSize(), ev.GetDataBuffer());
 
-        rMessage() << "Assigning layer " << sourceLayerId << " to parent layer " << targetLayerId << std::endl;
+    auto sourceLayerId = string::convert<int>(obj.GetText().ToStdString(), -1);
 
-        try
-        {
-            auto& layerManager = GlobalMapModule().getRoot()->getLayerManager();
-            layerManager.setParentLayer(sourceLayerId, targetLayerId);
-        }
-        catch (const std::invalid_argument& ex)
-        {
-            wxutil::Messagebox::ShowError(fmt::format(_("Cannot set Parent Layer: {0}"), ex.what()), this);
-        }
+    if (sourceLayerId == targetLayerId)
+    {
+        ev.Veto();
+        return;
+    }
+
+    auto& layerManager = GlobalMapModule().getRoot()->getLayerManager();
+
+    if (layerManager.getParentLayer(sourceLayerId) == targetLayerId)
+    {
+        // Dragging a child onto its immediate parent will un-parent it
+        // Redirect the operation to the target layer's' parent
+        targetLayerId = layerManager.getParentLayer(targetLayerId);
+    }
+
+    rMessage() << "Assigning layer " << sourceLayerId << " to parent layer " << targetLayerId << std::endl;
+
+    try
+    {
+        
+        layerManager.setParentLayer(sourceLayerId, targetLayerId);
+    }
+    catch (const std::invalid_argument& ex)
+    {
+        wxutil::Messagebox::ShowError(fmt::format(_("Cannot set Parent Layer: {0}"), ex.what()), this);
     }
 }
 
