@@ -1,5 +1,7 @@
 #include "MediaBrowser.h"
 
+#include <wx/display.h>
+
 #include "ideclmanager.h"
 #include "imap.h"
 #include "ishaders.h"
@@ -8,13 +10,17 @@
 #include "wxutil/dataview/ResourceTreeViewToolbar.h"
 
 #include <wx/sizer.h>
+#include <wx/popupwin.h>
 
 #include "util/ScopedBoolLock.h"
-#include "ui/texturebrowser/TextureBrowser.h"
+#include "ui/texturebrowser/TextureBrowserManager.h"
 #include "ui/common/TexturePreviewCombo.h"
 
 #include "FocusMaterialRequest.h"
 #include "ui/UserInterfaceModule.h"
+#include "ui/texturebrowser/TextureDirectoryBrowser.h"
+#include "wxutil/MultiMonitor.h"
+#include "wxutil/TransientPopupWindow.h"
 
 namespace ui
 {
@@ -24,7 +30,8 @@ MediaBrowser::MediaBrowser(wxWindow* parent) :
 	_treeView(nullptr),
 	_preview(nullptr),
 	_blockShaderClipboardUpdates(false),
-    _reloadTreeOnIdle(false)
+    _reloadTreeOnIdle(false),
+    _showThumbnailBrowserOnIdle(false)
 {
     construct();
     queueTreeReload();
@@ -98,8 +105,32 @@ void MediaBrowser::onIdle()
 
     if (!_queuedSelection.empty())
     {
+        util::ScopedBoolLock lock(_blockShaderClipboardUpdates);
+
         setSelection(_queuedSelection);
         _queuedSelection.clear();
+    }
+
+    if (_showThumbnailBrowserOnIdle)
+    {
+        _showThumbnailBrowserOnIdle = false;
+
+        if (_treeView->IsDirectorySelected())
+        {
+            // When a directory is selected, open the popup
+            auto popup = new wxutil::TransientPopupWindow(this);
+            auto browser = new TextureDirectoryBrowser(popup, _treeView->GetSelectedTextureFolderName());
+            popup->GetSizer()->Add(browser, 1, wxEXPAND | wxALL, 3);
+
+            // Size reaching from the upper edge of the mediabrowser to the bottom of the screen (minus a few pixels)
+            auto rectScreen = wxutil::MultiMonitor::getMonitorForWindow(this);
+            int verticalOffset = -(GetScreenPosition().y - rectScreen.GetY()) / 2;
+            wxSize size(630, rectScreen.GetY() + rectScreen.GetHeight() - GetScreenPosition().y - verticalOffset - 40);
+
+            popup->PositionNextTo(this, verticalOffset, size);
+            popup->Layout();
+            popup->Popup();
+        }
     }
 }
 
@@ -180,17 +211,34 @@ void MediaBrowser::onMaterialDefsUnloaded()
 
 void MediaBrowser::_onTreeViewSelectionChanged(wxDataViewEvent& ev)
 {
-    util::ScopedBoolLock lock(_blockShaderClipboardUpdates);
-
     // Update the preview if a texture is selected
     if (!_treeView->IsDirectorySelected())
     {
         _preview->SetPreviewDeclName(getSelection());
-        GlobalShaderClipboard().setSourceShader(getSelection());
     }
     else
     {
         _preview->ClearPreview();
+
+        _showThumbnailBrowserOnIdle = true;
+        requestIdleCallback();
+    }
+
+    sendSelectionToShaderClipboard();
+}
+
+void MediaBrowser::sendSelectionToShaderClipboard()
+{
+    if (_blockShaderClipboardUpdates) return;
+
+    util::ScopedBoolLock lock(_blockShaderClipboardUpdates);
+
+    if (!_treeView->IsDirectorySelected())
+    {
+        GlobalShaderClipboard().setSourceShader(getSelection());
+    }
+    else
+    {
         // Nothing selected, clear the clipboard
         GlobalShaderClipboard().clear();
     }

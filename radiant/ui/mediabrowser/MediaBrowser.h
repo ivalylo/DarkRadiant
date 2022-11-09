@@ -46,6 +46,7 @@ private:
 
 	bool _blockShaderClipboardUpdates;
 	bool _reloadTreeOnIdle;
+    bool _showThumbnailBrowserOnIdle;
     std::string _queuedSelection;
 
     std::size_t _focusMaterialHandler;
@@ -89,6 +90,7 @@ private:
     void focusMaterial(FocusMaterialRequest& request);
 
 	void onShaderClipboardSourceChanged();
+	void sendSelectionToShaderClipboard();
 };
 
 }

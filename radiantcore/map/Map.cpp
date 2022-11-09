@@ -194,6 +194,10 @@ void Map::loadMapResourceFromLocation(const MapLocation& location)
             module::GlobalModuleRegistry().getModule(MODULE_RENDERSYSTEM)));
     }
 
+    // Update layer visibility of all nodes
+    scene::UpdateNodeVisibilityWalker updater(_resource->getRootNode()->getLayerManager());
+    _resource->getRootNode()->traverse(updater);
+
     // Map loading finished, emit the signal
     emitMapEvent(MapLoaded);
 
@@ -404,7 +408,7 @@ void Map::setEditMode(EditMode mode)
     if (_editMode == EditMode::Merge)
     {
         GlobalSelectionSystem().setSelectedAll(false);
-        GlobalSelectionSystem().SetMode(selection::SelectionSystem::eMergeAction);
+        GlobalSelectionSystem().setSelectionMode(selection::SelectionMode::MergeAction);
 
         if (getRoot())
         {
@@ -413,7 +417,7 @@ void Map::setEditMode(EditMode mode)
     }
     else
     {
-        GlobalSelectionSystem().SetMode(selection::SelectionSystem::ePrimitive);
+        GlobalSelectionSystem().setSelectionMode(selection::SelectionMode::Primitive);
 
         if (getRoot())
         {

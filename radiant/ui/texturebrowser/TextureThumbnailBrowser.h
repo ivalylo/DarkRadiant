@@ -2,12 +2,9 @@
 
 #include "wxutil/FreezePointer.h"
 
-#include <sigc++/connection.h>
 #include "texturelib.h"
 #include "wxutil/menu/PopupMenu.h"
 #include "registry/CachedKey.h"
-
-#include "TextureBrowserManager.h"
 
 #include "wxutil/DockablePanel.h"
 #include "wxutil/event/SingleIdleCallback.h"
@@ -25,33 +22,20 @@ class wxToolBar;
 namespace ui
 {
 
-constexpr const char* const RKEY_TEXTURES_HIDE_UNUSED = "user/ui/textures/browser/hideUnused";
-constexpr const char* const RKEY_TEXTURES_SHOW_FAVOURITES_ONLY = "user/ui/textures/browser/showFavouritesOnly";
-constexpr const char* const RKEY_TEXTURES_SHOW_OTHER_MATERIALS = "user/ui/textures/browser/showOtherMaterials";
-constexpr const char* const RKEY_TEXTURES_SHOW_NAMES = "user/ui/textures/browser/showNames";
-constexpr const char* const RKEY_TEXTURE_UNIFORM_SIZE = "user/ui/textures/browser/uniformSize";
-constexpr const char* const RKEY_TEXTURE_USE_UNIFORM_SCALE = "user/ui/textures/browser/useUniformScale";
-constexpr const char* const RKEY_TEXTURE_SCALE = "user/ui/textures/browser/textureScale";
-constexpr const char* const RKEY_TEXTURE_SHOW_SCROLLBAR = "user/ui/textures/browser/showScrollBar";
-constexpr const char* const RKEY_TEXTURE_MOUSE_WHEEL_INCR = "user/ui/textures/browser/mouseWheelIncrement";
-constexpr const char* const RKEY_TEXTURE_SHOW_FILTER = "user/ui/textures/browser/showFilter";
-constexpr const char* const RKEY_TEXTURE_CONTEXTMENU_EPSILON = "user/ui/textures/browser/contextMenuMouseEpsilon";
-constexpr const char* const RKEY_TEXTURE_MAX_NAME_LENGTH = "user/ui/textures/browser/maxShadernameLength";
-
 /**
- * \brief Widget for rendering active textures as tiles in a scrollable
+ * \brief Widget for rendering textures thumbnails as tiles in a scrollable
  * container.
  *
  * Uses an OpenGL widget to render a rectangular view into a "virtual space"
  * containing all active texture tiles.
  */
-class TextureBrowser :
-    public wxutil::DockablePanel,
+class TextureThumbnailBrowser :
+    public wxPanel,
     public sigc::trackable,
     public wxutil::SingleIdleCallback
 {
     class TextureTile;
-    typedef std::list<TextureTile> TextureTiles;
+    typedef std::list<std::shared_ptr<TextureTile>> TextureTiles;
     TextureTiles _tiles;
 
     // Size of the 2D viewport. This is the geometry of the render window, not
@@ -103,35 +87,34 @@ class TextureBrowser :
     bool _showTextureFilter;
     // make the texture increments match the grid changes
     bool _showTextureScrollbar;
-    // if true, the texture window will only display in-use shaders
-    // if false, all the shaders in memory are displayed
-    bool _hideUnused;
-    bool _showFavouritesOnly;
+    
     registry::CachedKey<bool> _showNamesKey;
     int _textureScale;
     bool _useUniformScale;
-
-    // Cached set of material favourites
-    std::set<std::string> _favourites;
-
-    // Whether materials not starting with "textures/" should be visible
-    bool _showOtherMaterials;
 
     // The uniform size (in pixels) that textures are resized to when m_resizeTextures is true.
     int _uniformTextureSize;
 
     unsigned int _maxNameLength;
 
-	wxToolBar* _textureToolbar;
-
     // renderable items will be updated next round
     bool _updateNeeded;
 
-    sigc::connection _favouritesChangedHandler;
+    // Data structure keeping track of the virtual position for the next texture to
+    // be drawn in. Only the getNextPositionForTexture() method should access the values
+    // in this structure.
+    class CurrentPosition
+    {
+    public:
+        CurrentPosition();
+
+        Vector2i origin;
+        int rowAdvance;
+    };
+    std::unique_ptr<CurrentPosition> _currentPopulationPosition;
 
 public:
-    TextureBrowser(wxWindow* parent);
-    ~TextureBrowser() override;
+    TextureThumbnailBrowser(wxWindow* parent, bool showToolbar = true);
 
     // Schedules an update of the renderable items
     void queueUpdate();
@@ -149,26 +132,30 @@ public:
 
 protected:
     void onIdle() override;
-    void onPanelActivated() override;
-    void onPanelDeactivated() override;
 
-private:
-    void connectListeners();
-    void disconnectListeners();
+    // To be implemented by subclasses, this method should iterate over all
+    // materials that should be shown in the view, calling createTile on each material.
+    // (All previous tiles will already have been removed from the view.)
+    virtual void populateTiles() = 0;
 
-private:
+    void createTileForMaterial(const MaterialPtr& material);
+
+    // Returns the currently active filter string or "" if not active.
+    std::string getFilter();
+
+    // Returns true if the given material name is filtered out (should be invisible)
+    bool materialIsFiltered(const std::string& materialName);
+
     void clearFilter();
 
+private:
     int getViewportHeight();
 
     // Callback needed for DeferredAdjustment
     void scrollChanged(double value);
 
-    // Actually updates the renderable items (usually done before rendering)
-    void performUpdate();
-
-    // This gets called by the ShaderSystem
-    void onActiveShadersChanged();
+    // Repopulates the texture tiles
+    void refreshTiles();
 
     // Return the display width/height of a texture in the texture browser
     int getTextureWidth(const Texture& tex) const;
@@ -176,9 +163,7 @@ private:
 
     // Get a new position for the given texture, and advance the CurrentPosition
     // state object.
-    class CurrentPosition;
-    Vector2i getPositionForTexture(CurrentPosition& layout,
-                                   const Texture& texture) const;
+    Vector2i getNextPositionForTexture(const Texture& texture);
 
     bool checkSeekInMediaBrowser(); // sensitivity check
     void onSeekInMediaBrowser();
@@ -190,8 +175,6 @@ private:
     void keyChanged();
     void loadScaleFromRegistry();
 
-    void onFavouritesChanged();
-
     /** greebo: The actual drawing method invoking the GL calls.
      */
     void draw();
@@ -201,11 +184,6 @@ private:
     void doMouseWheel(bool wheelUp);
 
     void updateScroll();
-
-    /** greebo: Returns the currently active filter string or "" if
-     *          the filter is not active.
-     */
-    std::string getFilter();
 
     /**
      * Callback run when filter text was changed.
@@ -240,11 +218,6 @@ private:
      */
     void selectTextureAt(int mx, int my);
 
-    /** greebo: Returns true if the given material is visible,
-     * taking filter and showUnused into account.
-     */
-    bool materialIsVisible(const MaterialPtr& material);
-
 	// wx callbacks
 	bool onRender();
 	void onScrollChanged(wxScrollEvent& ev);
@@ -260,5 +233,3 @@ private:
 
 } // namespace ui
 
-// Accessor method to the singleton instance
-ui::TextureBrowserManager& GlobalTextureBrowser();

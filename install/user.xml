@@ -67,7 +67,6 @@
     <defaultPivotLocationIgnoresLightVolumes value="1" />
     <selectionEpsilon value="8.0" />
     <dragResizeEntitiesSymmetrically value="1" />
-    <transientComponentSelection value="1" />
     <offsetClonedObjects value="1" />
     <manipulatorFontSize value="14" />
     <manipulatorFontStyle value="Sans" />
@@ -203,6 +202,7 @@
     </renderSystem>
     <camera>
       <toggleFreeMove value="1" />
+      <dragSelectionEnabled value ="1" />
       <enableCubicClipping value="1" />
       <discreteMovement value="1" />
       <invertMouseVerticalAxis value="0" />

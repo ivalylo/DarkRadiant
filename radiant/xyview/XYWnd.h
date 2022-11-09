@@ -113,6 +113,7 @@ public:
 
     SelectionTestPtr createSelectionTestForPoint(const Vector2& point) override;
     const VolumeTest& getVolumeTest() const override;
+    bool supportsDragSelections() override;
     int getDeviceWidth() const override;
     int getDeviceHeight() const override;
     void queueDraw() override;
@@ -187,6 +188,7 @@ private:
     void ensureFont();
     void onContextMenu();
     void drawSizeInfo(int nDim1, int nDim2, const Vector3& vMinBounds, const Vector3& vMaxBounds);
+    void drawSelectionFocusArea(int nDim1, int nDim2, float xMin, float xMax, float yMin, float yMax);
     void drawCameraIcon();
     float getZoomedScale(int steps);
 
